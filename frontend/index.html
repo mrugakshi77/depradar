@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DepRadar v2 — Python Dependency Risk Scanner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Urbanist:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #1e2a3a; --surface: #253447; --surface2: #2d3f56;
+      --border: #3a5068; --border2: #4a6480;
+      --ok: #4ade80; --low: #60c8ff; --medium: #fbbf24;
+      --high: #fb923c; --critical: #f87171;
+      --text: #e8f0fa; --muted: #8aabcc; --subtle: #5a7a9a;
+      --mono: 'JetBrains Mono', monospace;
+      --display: 'Urbanist', sans-serif;
+    }
+    html { scroll-behavior: smooth; }
+    body { background: var(--bg); color: var(--text); font-family: var(--display); font-size: 16px; min-height: 100vh; line-height: 1.5; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px; }
+
+    header { padding: 28px 0 22px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px; gap: 20px; }
+    .logo { display: flex; align-items: center; gap: 14px; }
+    .radar-icon { width: 36px; height: 36px; border: 2px solid var(--medium); border-radius: 50%; position: relative; flex-shrink: 0; }
+    .radar-icon::before { content: ''; position: absolute; inset: 7px; border: 1px solid rgba(251,191,36,0.4); border-radius: 50%; }
+    .radar-icon::after { content: ''; position: absolute; width: 2px; height: 50%; background: var(--medium); top: 0; left: 50%; transform-origin: bottom center; transform: translateX(-50%); animation: sweep 3s linear infinite; }
+    @keyframes sweep { to { transform: translateX(-50%) rotate(360deg); } }
+    .logo-name { font-family: var(--display); font-size: 1.75rem; font-weight: 800; letter-spacing: -0.01em; }
+    .logo-name span { color: var(--medium); }
+    .logo-sub { font-size: 0.8rem; color: var(--muted); font-family: var(--mono); }
+    .status-bar { display: flex; gap: 20px; font-family: var(--mono); font-size: 0.78rem; color: var(--muted); }
+    .status-item { display: flex; align-items: center; gap: 8px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--subtle); }
+    .status-dot.ok { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+    .status-dot.err { background: var(--critical); }
+
+    .mode-toggle { display: flex; gap: 4px; margin-bottom: 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 4px; width: fit-content; }
+    .mode-btn { padding: 10px 22px; background: transparent; border: none; color: var(--muted); font-family: var(--display); font-size: 0.95rem; font-weight: 600; cursor: pointer; border-radius: 7px; transition: all 0.15s; }
+    .mode-btn:hover { color: var(--text); }
+    .mode-btn.active { background: var(--surface2); color: var(--medium); border: 1px solid var(--border2); }
+    .input-panel { display: none; }
+    .input-panel.active { display: block; }
+
+    .field { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 13px 16px; border-radius: 8px; font-family: var(--mono); font-size: 0.95rem; outline: none; transition: border-color 0.15s, box-shadow 0.15s; width: 100%; }
+    .field::placeholder { color: var(--subtle); }
+    .field:focus { border-color: var(--medium); box-shadow: 0 0 0 3px rgba(251,191,36,0.1); }
+    .pkg-input-row { display: flex; gap: 12px; margin-bottom: 12px; }
+    .field-name { flex: 2; } .field-ver { flex: 1; max-width: 180px; }
+    .req-textarea { width: 100%; min-height: 180px; resize: vertical; background: var(--surface); border: 1px solid var(--border); color: var(--ok); padding: 16px; border-radius: 8px; font-family: var(--mono); font-size: 0.92rem; line-height: 1.7; outline: none; transition: border-color 0.15s; }
+    .req-textarea:focus { border-color: var(--medium); }
+    .drop-zone { border: 1px dashed var(--border2); border-radius: 8px; padding: 14px 20px; margin-bottom: 12px; text-align: center; font-size: 0.88rem; color: var(--muted); cursor: pointer; transition: all 0.15s; }
+    .drop-zone:hover, .drop-zone.drag-over { border-color: var(--medium); color: var(--medium); background: rgba(251,191,36,0.03); }
+    .github-grid { display: grid; grid-template-columns: 1fr 210px; gap: 12px; margin-bottom: 12px; }
+    .github-note { font-size: 0.85rem; color: var(--muted); margin-bottom: 14px; line-height: 1.6; font-family: var(--mono); }
+    .github-note code { color: var(--text); background: var(--surface2); padding: 2px 7px; border-radius: 4px; border: 1px solid var(--border); }
+
+    .action-row { display: flex; align-items: center; gap: 14px; margin-top: 16px; flex-wrap: wrap; }
+    .btn-scan { padding: 13px 32px; background: var(--medium); color: #0f1117; border: none; border-radius: 8px; font-family: var(--display); font-size: 1rem; font-weight: 700; cursor: pointer; transition: all 0.15s; }
+    .btn-scan:hover { background: #fcd34d; box-shadow: 0 0 20px rgba(251,191,36,0.35); }
+    .btn-scan:active { transform: scale(0.98); }
+    .btn-scan:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-add { padding: 11px 18px; background: transparent; border: 1px solid var(--border2); color: var(--muted); border-radius: 8px; font-family: var(--display); font-size: 0.9rem; cursor: pointer; transition: all 0.15s; }
+    .btn-add:hover { border-color: var(--medium); color: var(--medium); }
+    .hint-line { font-size: 0.82rem; color: var(--muted); font-family: var(--mono); margin-left: auto; }
+
+    .scan-status { min-height: 42px; display: flex; align-items: center; gap: 12px; font-size: 0.92rem; color: var(--muted); font-family: var(--mono); margin-bottom: 16px; }
+    .scan-status.scanning { color: var(--medium); }
+    .scan-status.error { color: var(--critical); }
+    .spinner { width: 16px; height: 16px; border: 2px solid var(--border2); border-top-color: var(--medium); border-radius: 50%; animation: spin 0.6s linear infinite; flex-shrink: 0; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #report { display: none; }
+    .source-badge { display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 0.8rem; color: var(--muted); border: 1px solid var(--border); padding: 7px 14px; border-radius: 6px; margin-bottom: 20px; }
+    .source-badge a { color: var(--low); text-decoration: none; }
+    .source-badge a:hover { text-decoration: underline; }
+
+    .score-banner { display: grid; grid-template-columns: 140px 1fr repeat(4, 110px); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 28px; background: var(--surface); }
+    .score-cell { padding: 24px 28px; border-right: 1px solid var(--border); }
+    .score-label { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+    .score-value { font-family: var(--display); font-size: 2.8rem; font-weight: 800; line-height: 1; }
+    .score-bar-cell { padding: 24px 28px; display: flex; flex-direction: column; justify-content: center; gap: 10px; border-right: 1px solid var(--border); }
+    .score-bar-bg { height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+    .score-bar-fill { height: 100%; border-radius: 4px; transition: width 0.8s cubic-bezier(0.16,1,0.3,1); }
+    .bar-labels { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 0.72rem; color: var(--subtle); }
+    .stat-cell { padding: 24px 20px; border-right: 1px solid var(--border); text-align: center; }
+    .stat-cell:last-child { border-right: none; }
+    .stat-num { font-family: var(--display); font-size: 2.2rem; font-weight: 800; line-height: 1; color: var(--subtle); }
+    .stat-num.has { color: var(--medium); }
+    .stat-lbl { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-top: 6px; }
+
+    .filter-row { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .filter-btn { padding: 8px 18px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--muted); font-family: var(--display); font-size: 0.88rem; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+    .filter-btn:hover { border-color: var(--medium); color: var(--medium); }
+    .filter-btn.active { background: var(--surface2); color: var(--text); border-color: var(--border2); }
+    .filter-btn[data-filter="critical"].active { color: var(--critical); border-color: var(--critical); background: rgba(248,113,113,0.08); }
+    .filter-btn[data-filter="high"].active     { color: var(--high);     border-color: var(--high);     background: rgba(251,146,60,0.08); }
+    .filter-btn[data-filter="medium"].active   { color: var(--medium);   border-color: var(--medium);   background: rgba(251,191,36,0.08); }
+    .filter-btn[data-filter="low"].active      { color: var(--low);      border-color: var(--low);      background: rgba(96,200,255,0.08); }
+    .filter-btn[data-filter="ok"].active       { color: var(--ok);       border-color: var(--ok);       background: rgba(74,222,128,0.08); }
+    .filter-count { margin-left: auto; font-family: var(--mono); font-size: 0.8rem; color: var(--muted); }
+
+    table { width: 100%; border-collapse: collapse; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 60px; }
+    thead { background: var(--surface); }
+    th { padding: 14px 18px; font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; cursor: pointer; animation: fadeIn 0.25s ease both; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: var(--surface); }
+    tbody tr.hidden { display: none; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+    td { padding: 14px 18px; vertical-align: middle; }
+
+    .pkg-name { font-family: var(--mono); font-size: 0.95rem; font-weight: 600; color: var(--text); }
+    .pkg-err { color: var(--critical); font-size: 0.78rem; margin-top: 3px; font-family: var(--mono); }
+
+    .risk-badge { display: inline-flex; align-items: center; padding: 5px 12px; border-radius: 6px; font-family: var(--mono); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; border: 1px solid; white-space: nowrap; }
+    .risk-badge.ok       { color: var(--ok);       border-color: rgba(74,222,128,0.35);  background: rgba(74,222,128,0.1); }
+    .risk-badge.low      { color: var(--low);       border-color: rgba(96,200,255,0.35);  background: rgba(96,200,255,0.1); }
+    .risk-badge.medium   { color: var(--medium);    border-color: rgba(251,191,36,0.35);  background: rgba(251,191,36,0.1); }
+    .risk-badge.high     { color: var(--high);      border-color: rgba(251,146,60,0.35);  background: rgba(251,146,60,0.1); }
+    .risk-badge.critical { color: var(--critical);  border-color: rgba(248,113,113,0.5);  background: rgba(248,113,113,0.12); animation: pulse-border 1.5s infinite; }
+    @keyframes pulse-border { 0%,100%{border-color:rgba(248,113,113,0.4)} 50%{border-color:rgba(248,113,113,1)} }
+
+    .flags { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .flag { font-family: var(--mono); font-size: 0.72rem; padding: 3px 9px; border-radius: 4px; border: 1px solid; white-space: nowrap; }
+    .flag.outdated   { color: var(--low);     border-color: rgba(96,200,255,0.35);  background: rgba(96,200,255,0.08); }
+    .flag.abandoned  { color: var(--medium);  border-color: rgba(251,191,36,0.35);  background: rgba(251,191,36,0.08); }
+    .flag.deprecated { color: var(--high);    border-color: rgba(251,146,60,0.35);  background: rgba(251,146,60,0.08); }
+    .flag.vuln       { color: var(--critical);border-color: rgba(248,113,113,0.35); background: rgba(248,113,113,0.08); }
+
+    td.mono { font-family: var(--mono); font-size: 0.88rem; color: var(--muted); }
+
+    .detail-row { display: none; background: var(--surface); }
+    .detail-row.open { display: table-row; }
+    .detail-inner { padding: 20px 24px 24px; border-top: 1px solid var(--border); display: grid; grid-template-columns: 1fr 1fr; gap: 20px 40px; }
+    .detail-section h4 { font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+    .detail-section p { font-size: 0.9rem; line-height: 1.7; color: var(--text); }
+    .cve-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+    .cve-item { display: flex; align-items: flex-start; gap: 10px; font-size: 0.85rem; flex-wrap: wrap; }
+    .cve-id { color: var(--critical); font-family: var(--mono); font-weight: 700; white-space: nowrap; font-size: 0.88rem; }
+    .cve-sev { font-family: var(--mono); font-size: 0.7rem; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.07em; border: 1px solid; white-space: nowrap; flex-shrink: 0; }
+    .cve-sev.critical { color: var(--critical); border-color: rgba(248,113,113,0.5); }
+    .cve-sev.high     { color: var(--high);     border-color: rgba(251,146,60,0.5); }
+    .cve-sev.medium   { color: var(--medium);   border-color: rgba(251,191,36,0.5); }
+    .cve-sev.low      { color: var(--low);       border-color: rgba(96,200,255,0.5); }
+    .cve-summary { color: var(--muted); font-size: 0.84rem; line-height: 1.5; flex: 1; min-width: 200px; }
+    .cve-link { color: var(--low); font-family: var(--mono); font-size: 0.76rem; text-decoration: none; }
+    .cve-link:hover { text-decoration: underline; }
+
+    @media(max-width: 800px) {
+      .score-banner { grid-template-columns: 1fr 1fr; }
+      .score-bar-cell { display: none; }
+      th:nth-child(n+5), td:nth-child(n+5) { display: none; }
+      .detail-inner { grid-template-columns: 1fr; }
+      .github-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">
+      <div class="radar-icon"></div>
+      <div>
+        <div class="logo-name">Dep<span>Radar</span></div>
+        <div class="logo-sub">python dependency risk scanner · v2</div>
+      </div>
+    </div>
+    <div class="status-bar">
+      <div class="status-item"><div class="status-dot" id="dot-db"></div><span>database</span></div>
+      <div class="status-item"><div class="status-dot" id="dot-pypi"></div><span>pypi</span></div>
+      <div class="status-item"><div class="status-dot" id="dot-osv"></div><span>osv</span></div>
+      <div class="status-item"><div class="status-dot" id="dot-gh"></div><span>github</span></div>
+    </div>
+  </header>
+
+  <div style="margin-bottom: 32px;">
+    <div class="mode-toggle">
+      <button class="mode-btn active" data-mode="packages">Package List</button>
+      <button class="mode-btn" data-mode="requirements">requirements.txt</button>
+      <button class="mode-btn" data-mode="github">GitHub Repo</button>
+    </div>
+
+    <div class="input-panel active" id="panel-packages">
+      <div id="pkg-rows">
+        <div class="pkg-input-row">
+          <input class="field field-name" placeholder="package name — e.g. requests" />
+          <input class="field field-ver" placeholder="version — e.g. 2.28.0" />
+        </div>
+      </div>
+      <div class="action-row">
+        <button class="btn-scan" id="btn-scan-pkgs">▶ Run Scan</button>
+        <button class="btn-add" id="btn-add-row">+ Add package</button>
+        <span class="hint-line">Omit version to check latest only</span>
+      </div>
+    </div>
+
+    <div class="input-panel" id="panel-requirements">
+      <div class="drop-zone" id="drop-zone">Drop requirements.txt here — or click to browse</div>
+      <input type="file" id="file-input" accept=".txt" style="display:none" />
+      <textarea class="req-textarea" id="req-textarea" placeholder="# Paste your requirements.txt here&#10;requests==2.28.0&#10;flask>=2.0&#10;numpy"></textarea>
+      <div class="action-row">
+        <button class="btn-scan" id="btn-scan-req">▶ Run Scan</button>
+        <span class="hint-line">Supports ==, >=, ~=, extras · CVE precision requires ==</span>
+      </div>
+    </div>
+
+    <div class="input-panel" id="panel-github">
+      <div class="github-note">Fetches requirements directly from a public GitHub repo.<br>Example: <code>https://github.com/psf/requests</code></div>
+      <div class="github-grid">
+        <input class="field" id="gh-url" placeholder="https://github.com/owner/repo" />
+        <input class="field" id="gh-ref" placeholder="branch or tag (optional)" />
+      </div>
+      <div style="margin-bottom:12px">
+        <input class="field" id="gh-path" placeholder="requirements.txt" style="max-width:320px" />
+      </div>
+      <div class="action-row">
+        <button class="btn-scan" id="btn-scan-gh">▶ Scan Repo</button>
+        <span class="hint-line">Public repos only unless GITHUB_TOKEN is set</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="scan-status" id="scan-status"></div>
+
+  <div id="report">
+    <div class="source-badge" id="source-badge"></div>
+    <div class="score-banner">
+      <div class="score-cell">
+        <div class="score-label">Risk Score</div>
+        <div class="score-value" id="rpt-score">—</div>
+      </div>
+      <div class="score-bar-cell">
+        <div class="score-bar-bg"><div class="score-bar-fill" id="rpt-bar" style="width:0%"></div></div>
+        <div class="bar-labels"><span>safe</span><span>critical</span></div>
+      </div>
+      <div class="stat-cell"><div class="stat-num" id="rpt-outdated">0</div><div class="stat-lbl">Outdated</div></div>
+      <div class="stat-cell"><div class="stat-num" id="rpt-abandoned">0</div><div class="stat-lbl">Abandoned</div></div>
+      <div class="stat-cell"><div class="stat-num" id="rpt-deprecated">0</div><div class="stat-lbl">Deprecated</div></div>
+      <div class="stat-cell"><div class="stat-num" id="rpt-vulnerable">0</div><div class="stat-lbl">Vulnerable</div></div>
+    </div>
+    <div class="filter-row">
+      <button class="filter-btn active" data-filter="all">All</button>
+      <button class="filter-btn" data-filter="critical">Critical</button>
+      <button class="filter-btn" data-filter="high">High</button>
+      <button class="filter-btn" data-filter="medium">Medium</button>
+      <button class="filter-btn" data-filter="low">Low</button>
+      <button class="filter-btn" data-filter="ok">OK</button>
+      <span class="filter-count" id="filter-count"></span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Package</th><th>Risk Level</th><th>Flags</th>
+          <th>Pinned</th><th>Latest</th><th>Last Release</th><th>CVEs</th>
+        </tr>
+      </thead>
+      <tbody id="pkg-tbody"></tbody>
+    </table>
+  </div>
+</div>
+<script>
+  const BASE = '';
+  let currentFilter = 'all';
+
+  async function checkHealth() {
+    try {
+      const r = await fetch(`${BASE}/health`);
+      const d = await r.json();
+      setDot('db',   d.database === 'ok');
+      setDot('pypi', (d.pypi||'').startsWith('ok'));
+      setDot('osv',  (d.osv||'').startsWith('ok'));
+      setDot('gh',   (d.github||'').startsWith('ok'));
+    } catch { ['db','pypi','osv','gh'].forEach(k => setDot(k, false)); }
+  }
+  function setDot(k, ok) { document.getElementById(`dot-${k}`).className = `status-dot ${ok?'ok':'err'}`; }
+
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.input-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(`panel-${btn.dataset.mode}`).classList.add('active');
+    });
+  });
+
+  document.getElementById('btn-add-row').addEventListener('click', () => {
+    const row = document.createElement('div');
+    row.className = 'pkg-input-row';
+    row.innerHTML = `<input class="field field-name" placeholder="package name" /><input class="field field-ver" placeholder="version" />`;
+    document.getElementById('pkg-rows').appendChild(row);
+    row.querySelector('input').focus();
+  });
+
+  const dropZone = document.getElementById('drop-zone');
+  const fileInput = document.getElementById('file-input');
+  dropZone.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', e => loadFile(e.target.files[0]));
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); loadFile(e.dataTransfer.files[0]); });
+  function loadFile(f) {
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = e => { document.getElementById('req-textarea').value = e.target.result; dropZone.textContent = `✓ Loaded: ${f.name}`; };
+    r.readAsText(f);
+  }
+
+  document.getElementById('btn-scan-pkgs').addEventListener('click', async () => {
+    const packages = [];
+    document.querySelectorAll('#pkg-rows .pkg-input-row').forEach(row => {
+      const [n, v] = row.querySelectorAll('input');
+      if (n.value.trim()) packages.push({ name: n.value.trim(), version: v.value.trim() || null });
+    });
+    if (!packages.length) { setStatus('Add at least one package name.', 'error'); return; }
+    await doScan('/scan', { packages, source: 'manual' });
+  });
+
+  document.getElementById('btn-scan-req').addEventListener('click', async () => {
+    const content = document.getElementById('req-textarea').value.trim();
+    if (!content) { setStatus('Paste or drop a requirements.txt first.', 'error'); return; }
+    await doScan('/scan/requirements', { content });
+  });
+
+  document.getElementById('btn-scan-gh').addEventListener('click', async () => {
+    const repo_url = document.getElementById('gh-url').value.trim();
+    if (!repo_url) { setStatus('Enter a GitHub repository URL.', 'error'); return; }
+    const payload = { repo_url, requirements_path: document.getElementById('gh-path').value.trim() || 'requirements.txt' };
+    const ref = document.getElementById('gh-ref').value.trim();
+    if (ref) payload.ref = ref;
+    await doScan('/scan/github', payload);
+  });
+
+  async function doScan(url, payload) {
+    setStatus('Scanning — fetching from PyPI and OSV.dev…', 'scanning');
+    document.getElementById('report').style.display = 'none';
+    document.querySelectorAll('.btn-scan').forEach(b => b.disabled = true);
+    try {
+      const r = await fetch(`${BASE}${url}`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      if (!r.ok) { const e = await r.json(); setStatus(`Error: ${e.detail||r.statusText}`, 'error'); return; }
+      setStatus('');
+      renderReport(await r.json());
+    } catch(e) {
+      setStatus(`Network error: ${e.message}`, 'error');
+    } finally {
+      document.querySelectorAll('.btn-scan').forEach(b => b.disabled = false);
+    }
+  }
+
+  function renderReport(data) {
+    const score = data.risk_score ?? 0;
+    const sc = document.getElementById('rpt-score');
+    sc.textContent = score.toFixed(0);
+    sc.style.color = scoreColor(score);
+    const bar = document.getElementById('rpt-bar');
+    bar.style.width = `${score}%`;
+    bar.style.background = scoreColor(score);
+    const setN = (id, v) => { const el = document.getElementById(id); el.textContent = v; el.className = `stat-num${v>0?' has':''}`; };
+    setN('rpt-outdated', data.outdated_count);
+    setN('rpt-abandoned', data.abandoned_count);
+    setN('rpt-deprecated', data.deprecated_count);
+    setN('rpt-vulnerable', data.vulnerable_count);
+    const badge = document.getElementById('source-badge');
+    badge.innerHTML = data.source === 'github' && data.github_repo
+      ? `GitHub · <a href="${esc(data.github_repo)}" target="_blank">${esc(data.github_repo)}</a> · ID: ${esc(data.scan_id)}`
+      : `${esc(data.source)} · ${data.package_count} packages · ID: ${esc(data.scan_id)}`;
+    renderTable(data.packages);
+    document.getElementById('report').style.display = 'block';
+    document.getElementById('report').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function renderTable(packages) {
+    const tbody = document.getElementById('pkg-tbody');
+    tbody.innerHTML = '';
+    packages.forEach((pkg, i) => {
+      const tr = document.createElement('tr');
+      tr.dataset.risk = pkg.risk_level;
+      tr.style.animationDelay = `${i * 20}ms`;
+      const months = pkg.months_since_release != null ? `${pkg.months_since_release}mo ago` : '—';
+      const flagsHtml = [
+        pkg.is_outdated   && `<span class="flag outdated">outdated</span>`,
+        pkg.is_abandoned  && `<span class="flag abandoned">abandoned</span>`,
+        pkg.is_deprecated && `<span class="flag deprecated">deprecated</span>`,
+        pkg.is_vulnerable && `<span class="flag vuln">CVEs</span>`,
+      ].filter(Boolean).join('') || `<span style="color:var(--subtle);font-size:0.82rem;font-family:var(--mono)">—</span>`;
+      tr.innerHTML = `
+        <td><div class="pkg-name">${esc(pkg.name)}</div>${pkg.fetch_error?`<div class="pkg-err">${esc(pkg.fetch_error)}</div>`:''}</td>
+        <td><span class="risk-badge ${pkg.risk_level}">${pkg.risk_level.toUpperCase()}</span></td>
+        <td><div class="flags">${flagsHtml}</div></td>
+        <td class="mono">${esc(pkg.pinned_version||'—')}</td>
+        <td class="mono">${esc(pkg.latest_version||'—')}</td>
+        <td class="mono">${months}</td>
+        <td class="mono" style="${pkg.cve_count>0?'color:var(--critical);font-weight:700':''}">${pkg.cve_count||'—'}</td>
+      `;
+      const detailTr = document.createElement('tr');
+      detailTr.className = 'detail-row';
+      detailTr.innerHTML = `<td colspan="7"><div class="detail-inner">${buildDetail(pkg)}</div></td>`;
+      tr.addEventListener('click', () => {
+        const isOpen = detailTr.classList.contains('open');
+        document.querySelectorAll('.detail-row.open').forEach(r => r.classList.remove('open'));
+        if (!isOpen) detailTr.classList.add('open');
+      });
+      tbody.appendChild(tr);
+      tbody.appendChild(detailTr);
+    });
+    applyFilter(currentFilter);
+    updateFilterCount();
+  }
+
+  function buildDetail(pkg) {
+    const signals = [
+      pkg.is_outdated   && `<span style="color:var(--low)">↑ Outdated</span> — newer version available: ${esc(pkg.latest_version)}`,
+      pkg.is_abandoned  && `<span style="color:var(--medium)">⏱ Abandoned</span> — no release in ${Math.round(pkg.months_since_release||0)} months`,
+      pkg.is_deprecated && `<span style="color:var(--high)">⚠ Deprecated</span>${pkg.deprecation_note?` — ${esc(pkg.deprecation_note)}`:''}`,
+      pkg.is_vulnerable && `<span style="color:var(--critical)">☠ Vulnerable</span> — ${pkg.cve_count} known CVE(s)`,
+    ].filter(Boolean);
+    const cveHtml = pkg.cves?.length
+      ? `<ul class="cve-list">${pkg.cves.map(c=>`
+          <li class="cve-item">
+            <span class="cve-id">${esc(c.id)}</span>
+            ${c.severity?`<span class="cve-sev ${c.severity}">${c.severity}</span>`:''}
+            <span class="cve-summary">${esc(c.summary||'')}</span>
+            ${c.url?`<a class="cve-link" href="${esc(c.url)}" target="_blank" rel="noopener">↗ advisory</a>`:''}
+          </li>`).join('')}</ul>`
+      : `<span style="color:var(--subtle);font-family:var(--mono);font-size:0.84rem">No known CVEs</span>`;
+    return `
+      <div class="detail-section">
+        <h4>Risk Signals</h4>
+        <p>${signals.length?signals.join('<br>'):'<span style="color:var(--ok)">✓ No issues detected</span>'}</p>
+      </div>
+      <div class="detail-section">
+        <h4>CVEs (${pkg.cve_count})</h4>
+        ${cveHtml}
+      </div>`;
+  }
+
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentFilter = btn.dataset.filter;
+      applyFilter(currentFilter);
+      updateFilterCount();
+    });
+  });
+
+  function applyFilter(f) {
+    document.querySelectorAll('#pkg-tbody tr[data-risk]').forEach(tr => {
+      const show = f === 'all' || tr.dataset.risk === f;
+      tr.classList.toggle('hidden', !show);
+      const next = tr.nextElementSibling;
+      if (next?.classList.contains('detail-row')) { if(!show) next.classList.remove('open'); next.classList.toggle('hidden',!show); }
+    });
+  }
+
+  function updateFilterCount() {
+    const vis = document.querySelectorAll('#pkg-tbody tr[data-risk]:not(.hidden)').length;
+    const tot = document.querySelectorAll('#pkg-tbody tr[data-risk]').length;
+    document.getElementById('filter-count').textContent = `Showing ${vis} of ${tot} packages`;
+  }
+
+  function scoreColor(s) {
+    if (s>=70) return 'var(--critical)';
+    if (s>=45) return 'var(--high)';
+    if (s>=20) return 'var(--medium)';
+    if (s>0)   return 'var(--low)';
+    return 'var(--ok)';
+  }
+
+  function setStatus(msg, type='') {
+    const el = document.getElementById('scan-status');
+    el.className = `scan-status ${type}`;
+    el.innerHTML = type==='scanning' ? `<div class="spinner"></div>${msg}` : msg;
+  }
+
+  function esc(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  checkHealth();
+</script>
+</body>
+</html>
