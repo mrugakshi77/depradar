@@ -60,13 +60,15 @@ depradar/
 ## Quick start
 
 ```bash
-git clone <repo>
+git clone https://github.com/mrugakshi77/depradar
 cd depradar
-docker compose up --build
+pixi run db-setup
+pixi run dev
 ```
 
 - **Frontend**: http://localhost:8000
 - **Swagger docs**: http://localhost:8000/docs
+- **Live demo**: https://depradar.onrender.com
 
 ---
 
