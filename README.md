@@ -1,5 +1,7 @@
 # DepRadar v2 — Python Dependency Risk Scanner
 
+**Live demo: [depradar.onrender.com](https://depradar.onrender.com)** | **API docs: [depradar.onrender.com/docs](https://depradar.onrender.com/docs)**
+
 Scan Python dependencies for four categories of risk. Supports `requirements.txt` upload, direct GitHub repository scanning, a REST API, and a CLI tool that integrates with CI/CD pipelines.
 
 ---
@@ -225,7 +227,7 @@ GITHUB_TOKEN=ghp_xxxx              # Optional: higher rate limits + private repo
 ## Resume bullets
 
 ```
-DepRadar — Python Dependency Risk Scanner (github.com/you/depradar)
+DepRadar — Python Dependency Risk Scanner (github.com/mrugakshi77/depradar | depradar.onrender.com)
 • Built an async REST API (FastAPI + SQLAlchemy 2.0) that parallelises dependency
   metadata and CVE retrieval across PyPI and OSV.dev using bounded asyncio concurrency
 • Designed a PostgreSQL caching layer with TTL-based refresh, reducing repeat scan
