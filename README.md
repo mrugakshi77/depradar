@@ -223,20 +223,3 @@ CACHE_TTL_HOURS=12                 # Re-fetch PyPI data frequency
 SCAN_CONCURRENCY=10                # Max parallel PyPI/OSV requests
 GITHUB_TOKEN=ghp_xxxx              # Optional: higher rate limits + private repos
 ```
-
----
-
-## Resume bullets
-
-```
-DepRadar — Python Dependency Risk Scanner (github.com/mrugakshi77/depradar | depradar.onrender.com)
-• Built an async REST API (FastAPI + SQLAlchemy 2.0) that parallelises dependency
-  metadata and CVE retrieval across PyPI and OSV.dev using bounded asyncio concurrency
-• Designed a PostgreSQL caching layer with TTL-based refresh, reducing repeat scan
-  latency from ~10s to <50ms for cached results
-• Implemented a GitHub repository scanner (POST /scan/github) that resolves branches
-  via the GitHub API and fetches requirements files directly from raw.githubusercontent.com
-• Built a CLI tool (depradar scan requirements.txt --fail-on high) for CI/CD pipeline
-  integration with structured exit codes and rich terminal output
-• Containerised the full stack with Docker Compose; deployed publicly at [url]
-```
